@@ -1,0 +1,61 @@
+import network
+import time
+import dht
+from machine import Pin
+import ujson
+import urequests  #Biblioteca para fazer requisições HTTP
+
+#Configurações do ThingSpeak
+WRITE_API_KEY = "QPJ3PHHW6NYIUA64"  #Chave de API do ThingSpeak
+CHANNEL_ID = "2671057"  #Channel ID do ThingSpeak
+
+#Configuração do sensor e pinos
+sensor = dht.DHT22(Pin(15))
+led = Pin(23, Pin.OUT)
+buzzer = Pin(22, Pin.OUT)
+
+#Limite de temperatura para ativar o ventilador e o buzzer
+TEMP_THRESHOLD = 30.0
+
+#Conectar ao WiFi
+print("Conectando ao WiFi", end="")
+sta_if = network.WLAN(network.STA_IF)
+sta_if.active(True)
+sta_if.connect('Wokwi-GUEST', '')
+while not sta_if.isconnected():
+    print(".", end="")
+    time.sleep(0.1)
+print(" Conectado!")
+
+while True:
+    print("Medindo condições climáticas...")
+    
+    try:
+        sensor.measure()
+        temp = sensor.temperature()
+        humidity = sensor.humidity()
+        
+        if temp is not None and humidity is not None:
+            #URL para enviar dados para o ThingSpeak
+            url = f"https://api.thingspeak.com/update?api_key={WRITE_API_KEY}&field1={temp}&field2={humidity}"
+            response = urequests.get(url)  #Fazer a requisição GET para enviar os dados
+            
+            print(f"Dados enviados: Temp={temp}, Humidity={humidity}")
+            print(response.text)  #Resposta do ThingSpeak
+            
+            #Controle do LED(ventilador) e do Buzzer(alarme)
+            if temp > TEMP_THRESHOLD:
+                led.on()
+                buzzer.on()
+                print("Temperatura alta! Ventilador e alarme ligados.")
+            else:
+                led.off()
+                buzzer.off()
+                print("Temperatura normal. Ventilador e alarme desligados.")
+        else:
+            print("Falha ao ler do sensor")
+
+    except Exception as e:
+        print("Erro ao medir dados do sensor:", e)
+
+    time.sleep(15)
